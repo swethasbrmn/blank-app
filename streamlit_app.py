@@ -44,11 +44,14 @@ def load_data():
 
 df = load_data()
 
+# 4rem is roughly 64px
+st.markdown("<h1 style='text-align: center; font-size: 4rem; text-decoration: underline;'>European Banking Churn Analysis</h1>", unsafe_allow_html=True)
+
 # --- 2. SIDEBAR NAVIGATION & USER CAPABILITIES ---
-st.sidebar.title("App Navigation")
+st.sidebar.title("")
 module = st.sidebar.radio(
     "Select Module", 
-    ["Overall Summary", "Geography Analysis", "Demographic Comparison", "High-Value Explorer"]
+    ["Overall Churn", "Geography Analysis", "Demographic Comparison", "High-Value Explorer"]
 )
 
 st.sidebar.markdown("---")
@@ -66,7 +69,7 @@ mask = (df["Geography"].isin(geo_selection)) & \
 filtered_df = df[mask]
 
 # --- 4. KPI AREA ---
-st.title(f"📊 {module}")
+st.title(f"{module}")
 
 if not filtered_df.empty:
     total_cust = len(filtered_df)
@@ -86,21 +89,21 @@ st.markdown("---")
 
 # --- 5. MODULE ROUTING ---
 
-if module == "Overall Summary":
+if module == "Overall Churn":
     col_left, col_right = st.columns(2)
     with col_left:
-        st.write("### Churn by Product Count")
+        st.markdown("<h3 style='text-align: center;'>Churn by Product Count</h3>", unsafe_allow_html=True)
         prod_churn = filtered_df.groupby("NumOfProducts")["Exited"].mean()
         st.bar_chart(prod_churn)
         
     with col_right:
-        st.write("### Churn Distribution by Credit Band")
+        st.markdown("<h3 style='text-align: center;'>Churn Distribution by Credit Band</h3>", unsafe_allow_html=True)
         # Uses the Ratio Method: Churn rate per credit segment
         credit_churn = filtered_df.groupby("CreditBand", observed=False)["Exited"].mean()
         st.bar_chart(credit_churn)
 
 elif module == "Geography Analysis":
-    st.write("### Regional Churn Breakdown (Retained vs Churned)")
+    st.markdown("<h3 style='text-align: center;'>Regional Churn Breakdown (Retained vs Churned),</h3>", unsafe_allow_html=True)
     geo_data = filtered_df.groupby(["Geography", "Exited"]).size().unstack(fill_value=0)
     geo_data.columns = ["Retained", "Churned"]
     st.bar_chart(geo_data, color=["#2ecc71", "#e74c3c"])
@@ -119,7 +122,7 @@ elif module == "Demographic Comparison":
         age_churn = filtered_df.groupby("AgeGroup", observed=False)["Exited"].mean()
         st.bar_chart(age_churn)
         
-    with col_ten:
+    with col_ten:    
         st.write("#### Churn by Tenure Group")
         tenure_churn = filtered_df.groupby("TenureGroup", observed=False)["Exited"].mean()
         st.area_chart(tenure_churn)
@@ -136,7 +139,6 @@ elif module == "High-Value Explorer":
         # Quantify revenue risk
         risk_capital = hv_df[hv_df["Exited"] == 1]["Balance"].sum()
         st.error(f"Total Capital at Risk (Churned HV Customers): ${risk_capital:,.0f}")
-        
         st.write("#### Financial Stability: Salary vs Balance (Churned)")
         # Area chart comparing financial metrics of those who left
         stability_data = hv_df[hv_df["Exited"] == 1].groupby('Geography')[['Balance', 'EstimatedSalary']].mean()
