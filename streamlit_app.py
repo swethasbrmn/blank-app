@@ -5,7 +5,7 @@ import numpy as np
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="European Bank Churn Dashboard", layout="wide")
 
-# --- CUSTOM CSS FOR KPI CARDS (Matches provided image) ---
+# --- CUSTOM CSS FOR KPI CARDS ---
 st.markdown("""
 <style>
     .kpi-card {
@@ -83,19 +83,22 @@ age_range = st.sidebar.slider("Age Range", int(df["Age"].min()), int(df["Age"].m
 
 # --- 3. FILTERING LOGIC ---
 mask = (df["Geography"].isin(geo_selection)) & \
-       (df["CreditBand"].isin(credit_selection)) & \
-       (df["Age"].between(age_range[0], age_range[1]))
+        (df["CreditBand"].isin(credit_selection)) & \
+        (df["Age"].between(age_range[0], age_range[1]))
 
 filtered_df = df[mask]
 
-# --- 4. TOP-LEVEL KPI UI (The "Image" Look) ---
+# --- 4. TOP-LEVEL KPI UI ---
 st.markdown("## Key Performance Indicators")
 if not filtered_df.empty:
     # Calculations
     total_cust = len(filtered_df)
-    churn_rate = (filtered_df["Exited"].sum() / total_cust) * 100
+    churn_rate = (filtered_df["Exited"].sum() / total_cust) * 100 
     hv_mask = filtered_df["Balance"] > 150000
-    hv_churn = (filtered_df[hv_mask]["Exited"].sum() / filtered_df[hv_mask].shape[0] * 100) if any(hv_mask) else 0
+    hv_churn_count = filtered_df[hv_mask & (filtered_df["Exited"] == 1)].shape[0]
+    hv_churn_ratio = (hv_churn_count / filtered_df[hv_mask].shape[0] * 100) if any(hv_mask) else 0
+    
+    total_revenue_at_risk = filtered_df[filtered_df["Exited"] == 1]["Balance"].sum()
     engagement_drop = filtered_df[filtered_df["IsActiveMember"] == 0].shape[0]
     engagement_drop_pct = (engagement_drop / total_cust) * 100
     geo_risk = (filtered_df[filtered_df["Geography"] == "Germany"]["Exited"].mean() * 100) if "Germany" in geo_selection else 0
@@ -105,33 +108,44 @@ if not filtered_df.empty:
     with k1:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Overall Churn Rate</div><div class="kpi-value">{churn_rate:.2f}%</div></div>', unsafe_allow_html=True)
     with k2:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">High-Value Churn Ratio ⓘ</div><div class="kpi-value">{hv_churn:.2f}%</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">High-Value Churn Ratio ⓘ</div><div class="kpi-value">{hv_churn_ratio:.2f}%</div></div>', unsafe_allow_html=True)
     with k3:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Engagement Drop ⓘ</div><div class="kpi-value">{engagement_drop}</div><div class="kpi-subtext">↑ {engagement_drop_pct:.1f}% of Total</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Revenue at Risk</div><div class="kpi-value">${total_revenue_at_risk:,.0f}</div><div class="kpi-subtext">Capital Lost to Churn</div></div>', unsafe_allow_html=True)
 
     k4, k5, k6 = st.columns(3)
     with k4:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Segment Churn Rate</div><div class="kpi-value">{churn_rate + 0.39:.2f}%</div></div>', unsafe_allow_html=True)
     with k5:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Geographic Risk Index</div><div class="kpi-value">{geo_risk:.2f}%</div></div>', unsafe_allow_html=True)
+    with k6:
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Engagement Drop ⓘ</div><div class="kpi-value">{engagement_drop}</div><div class="kpi-subtext">↑ {engagement_drop_pct:.1f}% of Total</div></div>', unsafe_allow_html=True)
 else:
     st.warning("No data matches current filters.")
 
 st.markdown("---")
 
-# --- 5. ANALYTICS MODULES (The Functional Logic) ---
+# --- 5. ANALYTICS MODULES ---
 st.title(f"🔍 {module}")
 
 if module == "Overall Churn Summary":
-    col_left, col_right = st.columns(2)
-    with col_left:
-        st.markdown("### Churn by Product Count")
-        prod_churn = filtered_df.groupby("NumOfProducts")["Exited"].mean()
-        st.bar_chart(prod_churn)
-    with col_right:
-        st.markdown("### Churn Distribution by Credit Band")
-        credit_churn = filtered_df.groupby("CreditBand", observed=False)["Exited"].mean()
-        st.bar_chart(credit_churn)
+    # Segment-wise Churn Rates
+    st.markdown("### Segment-wise Churn Rates (By Products)")
+    prod_churn = filtered_df.groupby("NumOfProducts")["Exited"].mean()
+    st.bar_chart(prod_churn)
+    
+    # Churn Contribution (Moved below Product Churn)
+    st.markdown("### Churn Contribution by Segment Size (Geography)")
+    total_churned = filtered_df["Exited"].sum()
+    if total_churned > 0:
+        geo_contrib = filtered_df[filtered_df["Exited"] == 1].groupby("Geography").size() / total_churned
+        st.bar_chart(geo_contrib)
+    else:
+        st.write("No churn data to display contribution.")
+
+    # Credit Band Analysis
+    st.markdown("### Churn Distribution by Credit Band")
+    credit_churn = filtered_df.groupby("CreditBand", observed=False)["Exited"].mean()
+    st.bar_chart(credit_churn)
 
     st.markdown("### 📝 Quick Insight")
     st.info(f"Analysis shows that {'Germany' if 'Germany' in geo_selection else 'selected regions'} may require immediate retention campaigns based on current churn velocity.")
@@ -154,9 +168,17 @@ elif module == "Demographic Comparison":
 elif module == "High-Value Explorer":
     threshold = df["Balance"].quantile(0.75)
     hv_df = filtered_df[filtered_df["Balance"] >= threshold]
+    
     if not hv_df.empty:
         risk_capital = hv_df[hv_df["Exited"] == 1]["Balance"].sum()
-        st.error(f"Total Capital at Risk (Churned HV Customers): ${risk_capital:,.0f}")
-        st.area_chart(hv_df[hv_df["Exited"] == 1].groupby('Geography')[['Balance', 'EstimatedSalary']].mean())
+        st.error(f"High-Value Capital at Risk: ${risk_capital:,.0f}")
+        
+        st.markdown("### Salary vs. Balance Churn Patterns")
+        chart_data = hv_df[hv_df["Exited"] == 1].groupby('Geography')[['Balance', 'EstimatedSalary']].mean()
+        st.area_chart(chart_data)
+        
+        st.markdown("### Top High-Balance Churners")
+        high_bal_churners = hv_df[hv_df["Exited"] == 1].sort_values(by="Balance", ascending=False).head(10)
+        st.dataframe(high_bal_churners[["Surname", "Geography", "Balance", "EstimatedSalary", "CreditScore"]], use_container_width=True)
     else:
         st.write("No high-value customers in current filter.")
