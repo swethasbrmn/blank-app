@@ -89,21 +89,18 @@ mask = (df["Geography"].isin(geo_selection)) & \
 
 filtered_df = df[mask]
 
-# --- 4. TOP-LEVEL KPI UI (REVISED) ---
+# --- 4. TOP-LEVEL KPI UI ---
 st.markdown("## Key Performance Indicators")
 if not filtered_df.empty:
-    # Calculations
     total_cust = len(filtered_df)
     churn_rate = (filtered_df["Exited"].sum() / total_cust) * 100 
     hv_mask = filtered_df["Balance"] > 150000
     hv_churn_count = filtered_df[hv_mask & (filtered_df["Exited"] == 1)].shape[0]
     hv_churn_ratio = (hv_churn_count / filtered_df[hv_mask].shape[0] * 100) if any(hv_mask) else 0
-    
     total_revenue_at_risk = filtered_df[filtered_df["Exited"] == 1]["Balance"].sum()
     engagement_drop = filtered_df[filtered_df["IsActiveMember"] == 0].shape[0]
     engagement_drop_pct = (engagement_drop / total_cust) * 100
 
-    # UI Grid - 4 Columns for the remaining KPIs
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Overall Churn Rate</div><div class="kpi-value">{churn_rate:.2f}%</div></div>', unsafe_allow_html=True)
@@ -122,10 +119,19 @@ st.markdown("---")
 st.title(f"🔍 {module}")
 
 if module == "Overall Churn Summary":
-    st.markdown("### Segment-wise Churn Rates (By Products)")
-    prod_churn = filtered_df.groupby("NumOfProducts")["Exited"].mean()
-    st.bar_chart(prod_churn)
+    # --- NEW: ACTIVE VS NUM PRODUCTS CHURN ---
+    st.markdown("### Segment-wise Churn Rates (Active Status vs. Num Products)")
+    # Create a pivot table for the grouped bar chart
+    active_prod_churn = filtered_df.pivot_table(
+        index="NumOfProducts", 
+        columns="IsActiveMember", 
+        values="Exited", 
+        aggfunc="mean"
+    )
+    active_prod_churn.columns = ["Inactive Member Churn", "Active Member Churn"]
+    st.bar_chart(active_prod_churn)
     
+    # --- CHURN CONTRIBUTION BY GEOGRAPHY ---
     st.markdown("### Churn Contribution by Segment Size (Geography)")
     total_churned = filtered_df["Exited"].sum()
     if total_churned > 0:
@@ -166,6 +172,6 @@ elif module == "High-Value Explorer":
         st.area_chart(chart_data)
         
         st.markdown("### Top High-Balance Churners")
-        st.dataframe(high_bal_churners := hv_df[hv_df["Exited"] == 1].sort_values(by="Balance", ascending=False).head(10))
+        st.dataframe(hv_df[hv_df["Exited"] == 1].sort_values(by="Balance", ascending=False).head(10))
     else:
         st.write("No high-value customers in current filter.")
