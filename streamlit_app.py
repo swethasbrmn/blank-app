@@ -14,6 +14,7 @@ st.markdown("""
         padding: 20px;
         border: 1px solid #e9ecef;
         margin-bottom: 10px;
+        text-align: center;
     }
     .kpi-label {
         font-size: 14px;
@@ -88,7 +89,7 @@ mask = (df["Geography"].isin(geo_selection)) & \
 
 filtered_df = df[mask]
 
-# --- 4. TOP-LEVEL KPI UI ---
+# --- 4. TOP-LEVEL KPI UI (REVISED) ---
 st.markdown("## Key Performance Indicators")
 if not filtered_df.empty:
     # Calculations
@@ -101,24 +102,17 @@ if not filtered_df.empty:
     total_revenue_at_risk = filtered_df[filtered_df["Exited"] == 1]["Balance"].sum()
     engagement_drop = filtered_df[filtered_df["IsActiveMember"] == 0].shape[0]
     engagement_drop_pct = (engagement_drop / total_cust) * 100
-    geo_risk = (filtered_df[filtered_df["Geography"] == "Germany"]["Exited"].mean() * 100) if "Germany" in geo_selection else 0
 
-    # UI Grid
-    k1, k2, k3 = st.columns(3)
+    # UI Grid - 4 Columns for the remaining KPIs
+    k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Overall Churn Rate</div><div class="kpi-value">{churn_rate:.2f}%</div></div>', unsafe_allow_html=True)
     with k2:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">High-Value Churn Ratio ⓘ</div><div class="kpi-value">{hv_churn_ratio:.2f}%</div></div>', unsafe_allow_html=True)
     with k3:
         st.markdown(f'<div class="kpi-card"><div class="kpi-label">Total Revenue at Risk</div><div class="kpi-value">${total_revenue_at_risk:,.0f}</div><div class="kpi-subtext">Capital Lost to Churn</div></div>', unsafe_allow_html=True)
-
-    k4, k5, k6 = st.columns(3)
     with k4:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Segment Churn Rate</div><div class="kpi-value">{churn_rate + 0.39:.2f}%</div></div>', unsafe_allow_html=True)
-    with k5:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Geographic Risk Index</div><div class="kpi-value">{geo_risk:.2f}%</div></div>', unsafe_allow_html=True)
-    with k6:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Engagement Drop ⓘ</div><div class="kpi-value">{engagement_drop}</div><div class="kpi-subtext">↑ {engagement_drop_pct:.1f}% of Total</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><div class="kpi-label">Engagement Drop ⓘ</div><div class="kpi-value">{engagement_drop}</div><div class="kpi-subtext">↓ {engagement_drop_pct:.1f}% of Total</div></div>', unsafe_allow_html=True)
 else:
     st.warning("No data matches current filters.")
 
@@ -128,12 +122,10 @@ st.markdown("---")
 st.title(f"🔍 {module}")
 
 if module == "Overall Churn Summary":
-    # Segment-wise Churn Rates
     st.markdown("### Segment-wise Churn Rates (By Products)")
     prod_churn = filtered_df.groupby("NumOfProducts")["Exited"].mean()
     st.bar_chart(prod_churn)
     
-    # Churn Contribution (Moved below Product Churn)
     st.markdown("### Churn Contribution by Segment Size (Geography)")
     total_churned = filtered_df["Exited"].sum()
     if total_churned > 0:
@@ -142,13 +134,9 @@ if module == "Overall Churn Summary":
     else:
         st.write("No churn data to display contribution.")
 
-    # Credit Band Analysis
     st.markdown("### Churn Distribution by Credit Band")
     credit_churn = filtered_df.groupby("CreditBand", observed=False)["Exited"].mean()
     st.bar_chart(credit_churn)
-
-    st.markdown("### 📝 Quick Insight")
-    st.info(f"Analysis shows that {'Germany' if 'Germany' in geo_selection else 'selected regions'} may require immediate retention campaigns based on current churn velocity.")
 
 elif module == "Geography Analysis":
     geo_data = filtered_df.groupby(["Geography", "Exited"]).size().unstack(fill_value=0)
@@ -160,7 +148,7 @@ elif module == "Demographic Comparison":
     col_age, col_ten = st.columns(2)
     with col_age:
         st.write("#### Churn by Age Group")
-        st.bar_chart(filtered_df.groupby("AgeGroup", observed=False)["Exited"].mean())
+        st.line_chart(filtered_df.groupby("AgeGroup", observed=False)["Exited"].mean())
     with col_ten:
         st.write("#### Churn by Tenure Group")
         st.area_chart(filtered_df.groupby("TenureGroup", observed=False)["Exited"].mean())
@@ -178,7 +166,6 @@ elif module == "High-Value Explorer":
         st.area_chart(chart_data)
         
         st.markdown("### Top High-Balance Churners")
-        high_bal_churners = hv_df[hv_df["Exited"] == 1].sort_values(by="Balance", ascending=False).head(10)
-        st.dataframe(high_bal_churners[["Surname", "Geography", "Balance", "EstimatedSalary", "CreditScore"]], use_container_width=True)
+        st.dataframe(high_bal_churners := hv_df[hv_df["Exited"] == 1].sort_values(by="Balance", ascending=False).head(10))
     else:
         st.write("No high-value customers in current filter.")
